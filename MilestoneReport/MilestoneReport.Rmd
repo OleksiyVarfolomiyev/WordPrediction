@@ -1,0 +1,214 @@
+---
+title: "Natural Language Processing Project"
+author: "Alex (Oleksiy) Varfolomiyev"
+date: "December 27, 2015"
+output: html_document
+---
+## Synopsis
+
+People are spending an increasing amount of time on their mobile devices as 2015 reports show. Enhancement of the manipulation/typing on the mobile devices is of a tremendous use. SwiftKey company, builds a smart keyboard that makes it easier for people to type on their mobile devices. One cornerstone of their smart keyboard is predictive text models. 
+The current project focuses on the analysis of text data and natural language processing.
+
+We are provided with the text data from a corpus called HC Corpora <http://corpora.heliohost.org>. We perform text mining and exploratory analysis of the course data set understanding the distribution of words and relationship between the words in the corpora. 
+
+## Reading Data
+
+```{r, message=F}
+require(tm)
+require(stringi)
+require(SnowballC)
+require(RWeka)
+require(ggplot2)
+require(wordcloud)
+#require(parallel)
+```
+
+```{r, warning=FALSE, cache=TRUE, results='asis'}
+# Download text files
+if(!file.exists("final")) {
+   fileURL <- "http://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+   fileName <- "Coursera-SwiftKey.zip"
+   download.file(fileURL, fileName)
+   dateDownloaded <- date()
+   dateDownloaded
+   unzip(zipfile = dataDestination)
+}
+
+if(!exists("blg")) {
+  fileName <- file("./final/en_US/en_US.blogs.txt", "rt")
+  blg <- readLines(fileName, encoding="UTF-8")
+  close(fileName)
+}
+
+if(!exists("nws")) {
+  fileName <- file("./final/en_US/en_US.news.txt", "rt")
+  nws <- readLines(fileName, encoding="UTF-8")
+  close(fileName)
+}
+
+if(!exists("twit")) {
+  fileName <- file("./final/en_US/en_US.twitter.txt", "rt")
+  twit <- readLines(fileName, encoding="UTF-8")
+  close(fileName)
+}
+
+if(!exists("DataSummaryStats")) {
+  DataSummaryStats <- data.frame(
+    dataSource = c("blogs","news","twitter"),
+    Size = c(
+      file.info("./final/en_US/en_US.blogs.txt")$size,
+      file.info("./final/en_US/en_US.news.txt")$size,
+      file.info("./final/en_US/en_US.twitter.txt")$size),
+    Lines = c(length(blg), length(nws), length(twit)),
+    Words = c(sum(stri_count_words(blg)),
+              sum(stri_count_words(nws)),
+              sum(stri_count_words(twit)))
+  )
+}
+knitr::kable(DataSummaryStats)
+```
+
+## Data Processing
+
+```{r, warning=FALSE, cache=TRUE}
+# Sample data
+if(!exists("dat")) {
+  set.seed(111)
+  smplFraction <- .01
+  smplBlg <- sample(blg, smplFraction*length(blg))
+  rm(blg)
+  
+  smplNws <- sample(nws, smplFraction*length(nws))
+  rm(nws)
+  
+  smplTwit <- sample(twit, smplFraction*length(twit))
+  rm(twit)
+  
+  # Combine all texts to Corpus
+  dat <- c(smplBlg, smplNws, smplTwit)
+  dat <- VCorpus(VectorSource(dat))
+  
+  # Data Cleaning
+  #myCluster <- makeCluster(detectCores(), type = "FORK") # FORK will not work on Windows
+  
+  rmSpecialChars <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+  
+  dat <- tm_map(dat, removePunctuation)
+  dat <- tm_map(dat, removeNumbers)
+  #dat <- tm_map(dat, removeWords, stopwords("english"))
+  profanities <- readLines("./final/en_US/profanities.txt")
+  dat <- tm_map(dat, removeWords, profanities)
+  dat <- tm_map(dat, rmSpecialChars, "/|@|\\|#")
+  dat <- tm_map(dat, stripWhitespace)
+  dat <- tm_map(dat, content_transformer(tolower))
+  #dot <- tm_map(dat, stemDocument)
+  #save(dat, file = "./data/en_US/en_US.sample.Rda")
+  
+#  stopCluster(myCluster)
+
+}
+
+# N-grams init
+if(!exists("tdm")) {
+  options(mc.cores=1)
+  unigramTokenizer <- function(x) NGramTokenizer(x, control = Weka_control(min = 1, max = 1))
+  bigramTokenizer <- function(x) NGramTokenizer(x, control = Weka_control(min = 2, max = 2))
+  trigramTokenizer <- function(x) NGramTokenizer(x, control = Weka_control(min = 3, max = 3))
+  fourgramTokenizer <- function(x) NGramTokenizer(x, control = Weka_control(min = 4, max = 4))
+  
+  # Term Document Matrices init
+  tdm <- TermDocumentMatrix(dat)
+  pSparsity <- .999
+  tdm <- removeSparseTerms(tdm, pSparsity)
+#  save(tdm, file = "./data/en_US/en_US.tdm.Rda")
+  
+  tdm2 <- TermDocumentMatrix(dat, control = list(tokenize = bigramTokenizer))
+  tdm2 <- removeSparseTerms(tdm2, 0.999)
+#  save(tdm2, file = "./data/en_US/en_US.tdm2.Rda")
+  
+  tdm3 <- TermDocumentMatrix(dat, control = list(tokenize = trigramTokenizer))
+  tdm3 <- removeSparseTerms(tdm3, 0.999)
+#  save(tdm3, file = "./data/en_US/en_US.tdm3.Rda")
+  
+#   tdm4 <- TermDocumentMatrix(dat, control = list(tokenize = fourgramTokenizer))
+#   #tdm4 <- removeSparseTerms(tdm4, 0.999)
+#   save(tdm4, file = "./data/en_US/en_US.tdm4.Rda")
+}
+  
+```
+
+## Exploratory Data Analysis
+
+```{r, warning=FALSE, cache=TRUE, results='asis'}
+# Plot most frequent entries
+freq <- sort(rowSums(as.matrix(tdm)), decreasing = TRUE)
+wrdFreqMatrix <- data.frame(word = names(freq), frequency = freq,stringsAsFactors = F)
+saveRDS(wrdFreqMatrix, file = "./data/en_US/unigramsSample.Rds")
+
+set.seed(1)
+wordcloud(names(freq), freq, min.freq=500, colors=brewer.pal(8, "Dark2"))
+
+wrdFreqPlot <- ggplot(head(wrdFreqMatrix, 10), 
+                      aes(x = reorder(word, frequency), y = frequency, fill=frequency)) +
+  geom_bar(stat="identity") +
+  scale_fill_gradient( low = "deepskyblue4", high = "deepskyblue") +
+  theme_bw() +
+  coord_flip() +
+  theme(axis.title.y = element_blank()) +
+  labs(x = "word", y = "Frequency", title = "10 most frequent words in the sample")
+
+print(wrdFreqPlot)
+knitr::kable(head(wrdFreqMatrix, 10))
+
+# Plot most frequent bigrams
+tdm2_freq <- slam::row_sums(tdm2, na.rm = T)
+freq <- sort(tdm2_freq, decreasing = TRUE)
+wrd2FreqMatrix <- data.frame(bigram = names(freq), frequency = freq)
+saveRDS(wrdFreqMatrix, file = "./data/en_US/bigramsSample.Rds")
+
+set.seed(1)
+wordcloud(names(freq), freq, min.freq=150, colors=brewer.pal(8, "Dark2"))
+
+wrd2FreqPlot <- ggplot(head(wrd2FreqMatrix, 10), 
+                      aes(x = reorder(bigram, frequency), y = frequency, fill=frequency)) +
+  geom_bar(stat="identity") +
+  scale_fill_gradient(low = "coral3", high = "coral") +
+  theme_bw() +
+  coord_flip() +
+  theme(axis.title.y = element_blank()) +
+  labs(x = "word", y = "Frequency", title = "10 most frequent bigrams in the sample")
+
+print(wrd2FreqPlot)
+knitr::kable(head(wrd2FreqMatrix, 10))
+
+# Plot most frequent trigrams
+tdm3_freq <- slam::row_sums(tdm3, na.rm = T)
+freq <- sort(tdm3_freq, decreasing = TRUE)
+wrd3FreqMatrix <- data.frame(trigram = names(freq), frequency = freq)
+saveRDS(wrdFreqMatrix, file = "./data/en_US/trigramsSample.Rds")
+
+set.seed(1)
+wordcloud(names(freq), freq, min.freq=10, colors=brewer.pal(8, "Dark2"))
+
+wrd3FreqPlot <- ggplot(head(wrd3FreqMatrix, 10), 
+                       aes(x = reorder(trigram, frequency), y = frequency, fill=frequency)) +
+  geom_bar(stat="identity") +
+  scale_fill_gradient("Count", low = "deeppink4", high = "deeppink1") +
+  theme_bw() +
+  coord_flip() +
+  theme(axis.title.y = element_blank()) +
+  labs(x = "word", y = "Frequency", title = "10 most frequent trigrams in the sample")
+
+print(wrd3FreqPlot)
+knitr::kable(head(wrd3FreqMatrix, 10))
+
+```
+
+## Summary
+
+We have built basic n-gram model for the sample of data provided, it can be used for predicting the next word based on the previous 1, 2 or 3 words.
+The future model will handle unseen n-grams - in some cases people will want to type a combination of words that does not appear in the corpora. To build a model to handle cases where a particular n-gram isn't observed we will initially we use a backward algorithm reducing the size of n-gram until it's either found or predicting a most frequent term otherwise. Smoothing should be implemented to improve accuracy. Most common smoothing method Kneser–Ney is a method primarily used to calculate the probability distribution of n-grams in a document based on their histories.
+
+Shiny App under development will take typed text as an input and provide a few predictions of the next word in the typed text for the chosen algorithm and smoothing method.
+
+Model can be evaluated for efficiency and accuracy using timing software to evaluate the computational complexity of the model. Evaluation of the model accuracy using different metrics like perplexity, accuracy at the first word, second word, and third word, resampling. Alternative, more advanced libraries can be used for the text mining and processing to improve the efficiencty of the real-time Shiny App model prediction.
