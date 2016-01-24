@@ -14,24 +14,37 @@ shinyUI(
         #titlePanel("Word Prediction App"),
         
         sidebarPanel(
+          #wellPanel(
             sliderInput("sliderPredictionsN", label = h3("Predictions number"), min = 3, max = 10, value = 4, step = 1),
+            #verbatimTextOutput("text")
+        #  ),
+          #  wellPanel(
               radioButtons("radio", label = h3("Predictions depth"),
                       choices = list("Bigrams" = 1, "Trigrams" = 2, "Fourgrams" = 3), 
                       selected = 2)
+          #  )
+            
+            #  verbatimTextOutput("value")
         ), #sidebarPanel
       
         mainPanel(
+          
+        #  h2("Input Text"),
+          
           wellPanel(
             uiOutput("words"),
             textInput("inputTxt","")
           ),
           wellPanel(
-            h4('Predictions Clicked'),
+            h4('Words Predicted'),
             textOutput('clicks'),
-             
-             h4('Words Count'),
-             textOutput('nWords')
+            
+            h4('Words Count'),
+            textOutput('nWords')
+             #h4('Prediction Time')
+           #  textOutput('predTime')
           ) # wellPanel
+        #  h4("Author: Alex (Oleksiy) Varfolomiyev")
         ) # mainPanel
         
     #  ) # pageWithSidebar
@@ -39,7 +52,9 @@ shinyUI(
     
     tabPanel("Exploratory Data Analysis",
           mainPanel(
+    #        fluidRow(
               includeMarkdown("./ExploratoryDataAnalysis/ExploratoryDataAnalysis.html")
+    #         )
           )
     ), # tabPanel
     
@@ -62,3 +77,13 @@ shinyUI(
 #  ) # fluidPage
   ) # navbarPage
 ) # shinyUI
+
+
+#    br()
+#     wellPanel(
+#       h4("Technical Details"),
+#       HTML("<p>Source code is freely available at <a href='https://github.com/bergiste/coursera-final-capstone' target='_blank'>https://github.com/bergiste/coursera-final-capstone</a></p>"),
+#       HTML("<p>A detailed application architecture presentation available at <a href='http://rpubs.com/bergiste/data-science-project' target='_blank'>http://rpubs.com/bergiste/data-science-project</a></p>"),
+#       h4("Author:"),
+#       p("Jose Bergiste")
+#     )
